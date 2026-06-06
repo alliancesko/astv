@@ -1,0 +1,18 @@
+# Build outputs
+/astv
+/tests/test
+
+# Compiler and analysis artifacts
+*.o
+*.a
+*.so
+*.gcda
+*.gcno
+*.gcov
+core
+core.*
+
+# Editor and temporary files
+*~
+*.swp
+*.tmp
