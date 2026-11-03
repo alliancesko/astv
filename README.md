@@ -1,5 +1,7 @@
 # astv
 
+[English](README.md) | [Русский](README.ru.md)
+
 Current version: `0.2.0`.
 
 `astv` is a terminal monitor for the Asterisk Manager Interface (AMI). Its
@@ -60,7 +62,33 @@ make test
 ```
 
 The project requires a C11 compiler and standard Linux/POSIX headers. It has no
-third-party runtime dependencies.
+third-party runtime dependencies. The build links POSIX threads with `-pthread`;
+ncurses is not required. Use a UTF-8 locale and a terminal with Unicode
+box-drawing support.
+
+Install build tools on Debian/Ubuntu:
+
+```sh
+sudo apt install build-essential
+```
+
+On AlmaLinux/Rocky Linux/Fedora:
+
+```sh
+sudo dnf install gcc make glibc-devel
+```
+
+Build from a local checkout with `make`. Optionally install the binary:
+
+```sh
+sudo install -m 0755 astv /usr/local/bin/astv
+sudo astv
+```
+
+There is no `make install` target. To remove an installed binary, remove
+`/usr/local/bin/astv`. Credentials remain in `/etc/astv/astv.conf` until removed
+separately. Build on the target distribution when using older glibc versions;
+one prebuilt binary is not guaranteed to run on every Linux release.
 
 ## Asterisk configuration
 
@@ -87,7 +115,13 @@ asterisk -rx "manager show users"
 ```
 
 Adjust `permit` only when a remote client must connect. Do not expose plain AMI
-port 5038 to the public Internet. Prefer a VPN, an SSH tunnel, or AMI TLS.
+port 5038 to the public Internet. Use a VPN or an SSH tunnel. The current client
+uses plain TCP and does not implement native AMI TLS.
+
+The example AMI account is named `astv`, while interactive setup defaults to
+`monitor`: enter `astv` during setup when using this example. AMI `write`
+permissions authorize snapshot actions even though astv does not modify calls.
+Available actions also depend on loaded Asterisk modules and account permissions.
 
 ## First run
 
@@ -139,7 +173,7 @@ Values may be overridden without changing the configuration:
 Using an environment variable:
 
 ```sh
-ASTV_SECRET='replace-with-a-long-random-secret' ./astv \
+sudo env ASTV_SECRET='replace-with-a-long-random-secret' ./astv \
   --host 127.0.0.1 --user astv
 ```
 
@@ -148,7 +182,7 @@ Using a protected file:
 ```sh
 printf '%s\n' 'replace-with-a-long-random-secret' > ~/.astv-secret
 chmod 600 ~/.astv-secret
-./astv --host 127.0.0.1 --user astv --secret-file ~/.astv-secret
+sudo ./astv --host 127.0.0.1 --user astv --secret-file ~/.astv-secret
 ```
 
 Options:
@@ -229,3 +263,63 @@ ssh -L 5038:127.0.0.1:5038 user@asterisk-server
 ```
 
 Then run `astv` against `127.0.0.1:5038`.
+
+Use a different local port if 5038 is already occupied, for example
+`ssh -N -L 15038:127.0.0.1:5038 user@asterisk-server`, then pass
+`--host 127.0.0.1 --port 15038` to astv.
+
+## Configuration precedence
+
+The configuration file is loaded first; a missing file triggers interactive
+setup even when overrides are supplied. `--host`, `--port`, and `--user`
+override the corresponding file values. `ASTV_SECRET` overrides the configured
+password, and `--secret-file` takes precedence over both. Overrides are not
+saved. With sudo, pass the environment explicitly as shown above.
+
+## Troubleshooting and limits
+
+- Connection refused or timed out: check the address, AMI listener, firewall,
+  tunnel, and `enabled` in `manager.conf`.
+- Authentication failed: check the account name, secret, and `permit` rule.
+- A protocol shows `-`: its AMI action was rejected or timed out; check loaded
+  channel modules and AMI permissions. A disabled chan_sip is normal on a
+  PJSIP-only server.
+- Broken borders: check terminal font and UTF-8 locale. Minimum size is 72x16.
+- No configuration in noninteractive use: create it through interactive setup
+  first, or provide an existing file with `--config`.
+
+Channel and peer tables each have a fixed capacity of 1024 entries. History is
+a 4096-entry in-memory ring: oldest events are overwritten, and history is not
+persisted across restarts. Snapshot traffic and RTCP events are filtered from
+the event view. Reconnection restores current state, but cannot recover events
+missed while disconnected. Version profiles describe implemented compatibility,
+not a guarantee that every distribution build has been tested.
+
+## Source layout
+
+- `src/main.c`: AMI session, peer snapshots, TUI, and keyboard input.
+- `src/ami.c`: streaming AMI parser.
+- `src/asterisk_compat.c`: version detection and compatibility decisions.
+- `src/channel_store.c`: channel state and call grouping.
+- `src/connection.c`: asynchronous DNS/TCP connection attempts.
+- `src/config.c`: configuration loading, validation, and atomic saving.
+- `include/`: public interfaces and application version.
+- `tests/test.c`: regression tests; run with `make test`.
+
+## Author and development
+
+Author and maintainer: **Yuriy_Y** ([alliancesko](https://github.com/alliancesko)).
+
+Developed with the assistance of **OpenAI Codex**, under the author's direction
+and supervision. The author defines requirements, guides design decisions, and
+tests the utility in their environment; Codex assists with implementation,
+review, optimization, and documentation. This is an independent project and is
+not an official OpenAI or Asterisk product.
+
+For bug reports, include the astv and Asterisk versions, distribution, terminal
+size, reproduction steps, and relevant anonymized AMI responses. Remove secrets,
+phone numbers, and other sensitive data before sharing logs or configuration.
+
+## License
+
+Copyright (c) 2026 Yuriy_Y. Distributed under the [MIT License](LICENSE).
